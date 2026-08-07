@@ -1,0 +1,6 @@
+import { NextRequest, NextResponse } from "next/server";
+import { isAdminAuthenticated } from "@/lib/admin/verify";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
+const ALLOWED=["category","style","description","price_from","price_to","currency","image_url","active","sort_order"];
+export async function PATCH(request:NextRequest,{params}:{params:Promise<{id:string}>}){if(!(await isAdminAuthenticated()))return NextResponse.json({error:"No autorizado"},{status:401});const{id}=await params;const body=await request.json();const updates=Object.fromEntries(Object.entries(body).filter(([key])=>ALLOWED.includes(key)));if("price_from"in updates)updates.price=Number(updates.price_from);const{data,error}=await getSupabaseServerClient().from("price_settings").update(updates).eq("id",id).select("*").single();if(error)return NextResponse.json({error:error.message},{status:500});return NextResponse.json({price:data})}
+export async function DELETE(_:NextRequest,{params}:{params:Promise<{id:string}>}){if(!(await isAdminAuthenticated()))return NextResponse.json({error:"No autorizado"},{status:401});const{id}=await params;const{error}=await getSupabaseServerClient().from("price_settings").delete().eq("id",id);if(error)return NextResponse.json({error:error.message},{status:500});return NextResponse.json({ok:true})}

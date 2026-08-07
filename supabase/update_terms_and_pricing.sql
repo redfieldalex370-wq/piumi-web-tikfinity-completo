@@ -1,0 +1,8 @@
+-- Archivo conservado por compatibilidad con la versión anterior.
+-- La migración actual y completa está en:
+--
+--   supabase/schema.sql
+--
+-- Ejecuta schema.sql completo en Supabase > SQL Editor. Es idempotente,
+-- conserva datos existentes y agrega galería, precios, términos,
+-- comisiones unificadas y módulos TikFinity.

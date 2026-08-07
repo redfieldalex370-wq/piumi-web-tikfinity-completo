@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-labelledby="title desc">
+  <title id="title">Horario de streams pendiente</title>
+  <desc id="desc">Plantilla temporal que puede reemplazarse desde el panel administrativo.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fff7f2"/>
+      <stop offset="1" stop-color="#f7d9e7"/>
+    </linearGradient>
+    <pattern id="dots" width="34" height="34" patternUnits="userSpaceOnUse">
+      <circle cx="4" cy="4" r="2" fill="#7b5d86" opacity=".18"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="675" rx="46" fill="url(#bg)"/>
+  <rect width="1200" height="675" rx="46" fill="url(#dots)"/>
+  <path d="M70 105C225 34 327 78 420 38M780 620c136-76 247-14 350-88" fill="none" stroke="#ef7f9a" stroke-width="16" stroke-linecap="round" opacity=".5"/>
+  <g fill="#17131d" text-anchor="middle" font-family="Arial, sans-serif">
+    <text x="600" y="245" font-size="72" font-weight="800">HORARIO DE STREAMS</text>
+    <text x="600" y="330" font-size="34">Sube tu imagen desde Admin → Configuración</text>
+    <text x="600" y="400" font-size="28" fill="#775f7f">Mientras tanto, esta tarjeta guarda el espacio ✦</text>
+  </g>
+  <g fill="#ef7f9a">
+    <path d="M172 470l13 28 30 4-22 21 6 30-27-15-27 15 6-30-22-21 30-4z"/>
+    <path d="M1008 158l9 19 21 3-15 14 4 21-19-10-18 10 4-21-15-14 20-3z"/>
+  </g>
+</svg>

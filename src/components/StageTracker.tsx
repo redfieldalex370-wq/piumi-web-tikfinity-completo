@@ -1,0 +1,7 @@
+import { COMMISSION_STAGES, STAGE_DESCRIPTIONS, STAGE_LABELS, type CommissionStage } from "@/types/commission";
+const FLOW=COMMISSION_STAGES.filter(stage=>stage!=="cancelado");
+export default function StageTracker({currentStage}:{currentStage:CommissionStage}){
+  if(currentStage==="cancelado")return <div className="alert-error"><b>Comisión cancelada</b><p className="mt-1">La solicitud fue cancelada. Contacta a Piumi si necesitas más información.</p></div>;
+  const currentIndex=FLOW.indexOf(currentStage);
+  return <div className="space-y-0">{FLOW.map((stage,index)=>{const done=index<currentIndex,current=index===currentIndex,last=index===FLOW.length-1;return <div key={stage} className="flex gap-4"><div className="flex flex-col items-center"><div className={"w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 "+(done||current?"bg-[var(--accent)] text-white":"bg-[var(--accent-soft)] text-[var(--accent-bright)]")}>{done?"✓":index+1}</div>{!last&&<div className={"w-0.5 flex-1 min-h-8 "+(done?"bg-[var(--accent)]":"bg-[var(--border)]")}/>}</div><div className={last?"pb-0":"pb-8"}><p className={"font-semibold "+(current?"text-[var(--accent-bright)]":done?"text-[var(--foreground)]":"text-[var(--muted)]")}>{STAGE_LABELS[stage]}{current&&<span className="ml-2 badge align-middle">Actual</span>}</p><p className="text-sm text-[var(--muted)] mt-0.5">{STAGE_DESCRIPTIONS[stage]}</p></div></div>})}</div>
+}
