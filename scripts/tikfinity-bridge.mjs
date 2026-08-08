@@ -1,7 +1,7 @@
 /**
  * TikFinity -> Piumi Event Ingest bridge
- * Ejecuta: npm run tikfinity
- * Requiere TikFinity abierto y su Event API en ws://localhost:21213/
+ * Run: npm run tikfinity
+ * Requires TikFinity open with Event API at ws://localhost:21213/
  */
 import { createHash, randomUUID } from "node:crypto";
 
@@ -11,15 +11,20 @@ const INGEST_URL = process.env.PIUMI_EVENT_INGEST_URL || "http://localhost:3000/
 const SECRET = process.env.PIUMI_EVENT_INGEST_SECRET || process.env.LIVE_EVENT_INGEST_SECRET;
 const BRIDGE_ID = process.env.TIKFINITY_BRIDGE_ID || `piumi-${process.platform}`;
 const LIKE_FLUSH_MS = Math.max(1000, Number(process.env.TIKFINITY_LIKE_FLUSH_MS || 4000));
+const EVENT_ALIASES = new Map([
+  ["member", "roomUser"],
+  ["roomuser", "roomUser"],
+  ["social", "share"],
+  ["viewer", "roomUser"],
+]);
+const ALLOWED_EVENTS = new Set(["chat", "gift", "share", "follow", "like", "roomUser", "subscribe"]);
 
 if (!SECRET) {
-  console.error("Falta PIUMI_EVENT_INGEST_SECRET o LIVE_EVENT_INGEST_SECRET.");
+  console.error("Missing PIUMI_EVENT_INGEST_SECRET or LIVE_EVENT_INGEST_SECRET.");
   process.exit(1);
 }
-if (typeof WebSocket === "undefined") {
-  console.error("Este puente requiere Node.js 22 o superior, que incluye WebSocket global.");
-  process.exit(1);
-}
+
+const WebSocketClient = globalThis.WebSocket || (await import("ws")).default;
 
 let socket;
 let reconnectTimer;
@@ -38,6 +43,13 @@ function getUserKey(data = {}) {
   return String(data.userId || data.uniqueId || data.nickname || "anonymous");
 }
 
+function normalizeEventName(event) {
+  const raw = String(event || "").trim();
+  if (!raw) return "";
+  const direct = [...ALLOWED_EVENTS].find((name) => name.toLowerCase() === raw.toLowerCase());
+  return direct || EVENT_ALIASES.get(raw.toLowerCase()) || raw;
+}
+
 function queueEnvelope(envelope) {
   deliveryQueue.push(envelope);
   void deliver();
@@ -54,10 +66,19 @@ async function deliver() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${SECRET}` },
         body: JSON.stringify(envelope),
       });
-      if (!response.ok) throw new Error(`${response.status} ${await response.text()}`);
+      if (!response.ok) {
+        const message = await response.text();
+        const isUnsupportedEvent = response.status === 400 && message.includes("Tipo de evento no permitido");
+        if (isUnsupportedEvent) {
+          console.warn(`Event discarded by ingest API: ${envelope.event}`);
+          deliveryQueue.shift();
+          continue;
+        }
+        throw new Error(`${response.status} ${message}`);
+      }
       deliveryQueue.shift();
     } catch (error) {
-      console.error("No se pudo entregar un evento:", error instanceof Error ? error.message : error);
+      console.error("Could not deliver event:", error instanceof Error ? error.message : error);
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   }
@@ -91,10 +112,20 @@ setInterval(flushLikes, LIKE_FLUSH_MS).unref();
 
 function handleTikFinityMessage(raw) {
   let payload;
-  try { payload = JSON.parse(String(raw)); } catch { return console.warn("TikFinity envió JSON inválido."); }
+  try {
+    payload = JSON.parse(String(raw));
+  } catch {
+    console.warn("TikFinity sent invalid JSON.");
+    return;
+  }
   if (!payload || typeof payload.event !== "string" || !payload.data) return;
+  const eventName = normalizeEventName(payload.event);
+  if (!ALLOWED_EVENTS.has(eventName)) {
+    console.warn(`TikFinity event ignored: ${payload.event}`);
+    return;
+  }
   const occurredAt = new Date().toISOString();
-  if (payload.event === "like") {
+  if (eventName === "like") {
     const key = getUserKey(payload.data);
     const current = likeBuffer.get(key) || { count: 0, data: payload.data, windowStart: Date.now() };
     current.count += Math.max(1, Number(payload.data.likeCount || payload.data.count || 1));
@@ -102,34 +133,34 @@ function handleTikFinityMessage(raw) {
     likeBuffer.set(key, current);
     return;
   }
-  if (payload.event === "gift") {
+  if (eventName === "gift") {
     const giftType = Number(payload.data.giftType ?? payload.data.giftDetails?.giftType ?? 0);
     const repeatEnd = Boolean(payload.data.repeatEnd ?? giftType !== 1);
     if (giftType === 1 && !repeatEnd) return;
   }
   const nativeId = payload.data.msgId || payload.data.messageId || payload.data.eventId || payload.data.logId || randomUUID();
-  queueEnvelope({ event: payload.event, data: payload.data, bridgeId: BRIDGE_ID, occurredAt, eventKey: `${payload.event}:${nativeId}` });
+  queueEnvelope({ event: eventName, data: payload.data, bridgeId: BRIDGE_ID, occurredAt, eventKey: `${eventName}:${nativeId}` });
 }
 
 function connect() {
   if (shuttingDown) return;
-  console.log(`Conectando TikFinity: ${WS_URL}`);
-  socket = new WebSocket(WS_URL);
+  console.log(`Connecting TikFinity: ${WS_URL}`);
+  socket = new WebSocketClient(WS_URL);
   socket.addEventListener("open", () => {
     reconnectAttempt = 0;
-    console.log("TikFinity conectado. El puente está escuchando eventos.");
+    console.log("TikFinity connected. The bridge is listening for events.");
     sendBridgeStatus("online");
     clearInterval(heartbeatTimer);
     heartbeatTimer = setInterval(() => sendBridgeStatus("online"), 30000);
   });
   socket.addEventListener("message", (event) => handleTikFinityMessage(event.data));
-  socket.addEventListener("error", () => sendBridgeStatus("error", "Error de conexión WebSocket con TikFinity"));
+  socket.addEventListener("error", () => sendBridgeStatus("error", "TikFinity WebSocket connection error"));
   socket.addEventListener("close", () => {
     clearInterval(heartbeatTimer);
     if (shuttingDown) return;
     sendBridgeStatus("offline");
     const delay = Math.min(30000, 1000 * 2 ** reconnectAttempt++);
-    console.log(`TikFinity desconectado. Reintento en ${Math.round(delay / 1000)} s.`);
+    console.log(`TikFinity disconnected. Retrying in ${Math.round(delay / 1000)} s.`);
     reconnectTimer = setTimeout(connect, delay);
   });
 }
