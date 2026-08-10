@@ -6,11 +6,11 @@ import { normalizeLiveEvent } from "@/lib/live/normalize";
 import { TIKFINITY_EVENTS, type TikFinityEnvelope } from "@/types/live";
 
 function authorized(request: NextRequest): boolean {
-  const expected = process.env.LIVE_EVENT_INGEST_SECRET;
-  if (!expected) return false;
+  const expectedSecrets = [process.env.LIVE_EVENT_INGEST_SECRET, process.env.PIUMI_EVENT_INGEST_SECRET].filter((value): value is string => Boolean(value));
+  if (!expectedSecrets.length) return false;
   const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   const header = request.headers.get("x-live-secret");
-  return bearer === expected || header === expected;
+  return expectedSecrets.some((secret) => secret === bearer || secret === header);
 }
 
 function eventKey(envelope: TikFinityEnvelope, occurredAt: string): string {
